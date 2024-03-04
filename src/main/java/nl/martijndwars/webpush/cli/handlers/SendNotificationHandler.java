@@ -18,13 +18,12 @@ public class SendNotificationHandler implements HandlerInterface {
         PushAsyncService pushService = new PushAsyncService()
             .setPublicKey(sendNotificationCommand.getPublicKey())
             .setPrivateKey(sendNotificationCommand.getPrivateKey())
-            .setSubject("mailto:admin@domain.com");
+            .setSubject("mailto:admin@apartmentadvisor.com");
 
         Subscription subscription = sendNotificationCommand.getSubscription();
 
         Notification notification = new Notification(subscription, sendNotificationCommand.getPayload());
 
         PushAsyncService.PushCallback callback = pushService.send(notification);
-        callback.wait();
     }
 }
