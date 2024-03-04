@@ -1,20 +1,23 @@
 package nl.martijndwars.webpush;
 
-import org.asynchttpclient.AsyncHttpClient;
-import org.asynchttpclient.BoundRequestBuilder;
-import org.asynchttpclient.Response;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+import okhttp3.Call;
+import okhttp3.Callback;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.RequestBody;
+import okhttp3.Response;
+import org.jetbrains.annotations.NotNull;
 import org.jose4j.lang.JoseException;
 
 import java.io.IOException;
 import java.security.GeneralSecurityException;
 import java.security.KeyPair;
-import java.util.concurrent.CompletableFuture;
-
-import static org.asynchttpclient.Dsl.asyncHttpClient;
 
 public class PushAsyncService extends AbstractPushService<PushAsyncService> {
 
-    private final AsyncHttpClient httpClient = asyncHttpClient();
+    private final OkHttpClient httpClient = new OkHttpClient();
 
     public PushAsyncService() {
     }
@@ -49,12 +52,15 @@ public class PushAsyncService extends AbstractPushService<PushAsyncService> {
      * @throws IOException
      * @throws JoseException
      */
-    public CompletableFuture<Response> send(Notification notification, Encoding encoding) throws GeneralSecurityException, IOException, JoseException {
-        BoundRequestBuilder httpPost = preparePost(notification, encoding);
-        return httpPost.execute().toCompletableFuture();
+    public PushCallback send(Notification notification, Encoding encoding) throws GeneralSecurityException, IOException, JoseException {
+        var postRequest = preparePost(notification, encoding);
+
+        var callBack = new PushCallback();
+        httpClient.newCall(postRequest).enqueue(callBack);
+        return callBack;
     }
 
-    public CompletableFuture<Response> send(Notification notification) throws GeneralSecurityException, IOException, JoseException {
+    public PushCallback send(Notification notification) throws GeneralSecurityException, IOException, JoseException {
         return send(notification, Encoding.AES128GCM);
     }
 
@@ -68,13 +74,34 @@ public class PushAsyncService extends AbstractPushService<PushAsyncService> {
      * @throws IOException
      * @throws JoseException
      */
-    public BoundRequestBuilder preparePost(Notification notification, Encoding encoding) throws GeneralSecurityException, IOException, JoseException {
+    public Request preparePost(Notification notification, Encoding encoding) throws GeneralSecurityException, IOException, JoseException {
         HttpRequest request = prepareRequest(notification, encoding);
-        BoundRequestBuilder httpPost = httpClient.preparePost(request.getUrl());
-        request.getHeaders().forEach(httpPost::addHeader);
+
+        var builder = new Request.Builder().url(request.getUrl());
+        request.getHeaders().forEach(builder::addHeader);
         if (request.getBody() != null) {
-            httpPost.setBody(request.getBody());
+            builder.post(RequestBody.create(request.getBody()));
         }
-        return httpPost;
+
+        return builder.build();
+    }
+
+    public static final class PushCallback implements Callback {
+
+        private static final Logger log = Logger.getLogger(PushCallback.class.getName());
+
+        @Override
+        public void onFailure(@NotNull Call call, @NotNull IOException e) {
+            log.log(Level.SEVERE, "Push notification failed", e);
+        }
+
+        @Override
+        public void onResponse(@NotNull Call call, @NotNull Response response) throws IOException {
+            log.info(
+                String.format("Push notification success, responseCode=%d, response=%s",
+                response.code(),
+                response.body() == null ? null : new String(response.body().bytes()))
+            );
+        }
     }
 }
