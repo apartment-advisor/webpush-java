@@ -1,16 +1,9 @@
-plugins {
-    id 'application'
-    id 'java'
+jar {
+    enabled = true
 }
 
-apply plugin: 'application'
-apply plugin: 'java'
-
-group 'nl.martijndwars'
-version '5.1.2-SNAPSHOT'
-
-repositories {
-    mavenCentral()
+bootJar {
+    enabled = false
 }
 
 dependencies {
@@ -44,21 +37,6 @@ dependencies {
     // For verifying Base64Encoder results in unit tests
     testImplementation group: 'com.google.guava', name: 'guava', version: '33.0.0-jre'
 }
-
-wrapper {
-    gradleVersion = '7.6'
-}
-
-compileJava {
-    sourceCompatibility = JavaVersion.VERSION_17
-    targetCompatibility = JavaVersion.VERSION_17
-}
-
-compileTestJava {
-    sourceCompatibility = JavaVersion.VERSION_17
-}
-
-mainClassName = 'nl.martijndwars.webpush.cli.Cli'
 
 test {
     useJUnitPlatform()
