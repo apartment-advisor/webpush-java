@@ -1,21 +1,15 @@
 plugins {
     id 'application'
-    id 'com.github.johnrengelman.shadow' version '7.1.1'
-
-    // Used by release.gradle
-    id 'maven-publish'
-    id 'signing'
-    id 'io.codearte.nexus-staging' version '0.30.0'
+    id 'java'
 }
 
 apply plugin: 'application'
-apply plugin: 'com.github.johnrengelman.shadow'
+apply plugin: 'java'
 
 group 'nl.martijndwars'
 version '5.1.2-SNAPSHOT'
 
 repositories {
-    mavenLocal()
     mavenCentral()
 }
 
@@ -66,10 +60,6 @@ compileTestJava {
 
 mainClassName = 'nl.martijndwars.webpush.cli.Cli'
 
-run {
-    classpath configurations.shadow.files
-}
-
 test {
     useJUnitPlatform()
 
@@ -78,25 +68,5 @@ test {
         showStandardStreams true
         exceptionFormat 'full'
     }
-
-    exclude '**/SeleniumTests.class'
 }
 
-task javadocJar(type: Jar) {
-    classifier = 'javadoc'
-    from javadoc
-}
-
-task sourcesJar(type: Jar) {
-    classifier = 'sources'
-    from sourceSets.main.allSource
-}
-
-artifacts {
-    archives javadocJar
-    archives sourcesJar
-}
-
-if (hasProperty('release')) {
-    apply from: 'release.gradle'
-}
