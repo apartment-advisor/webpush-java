@@ -23,7 +23,6 @@ public class SendNotificationHandler implements HandlerInterface {
         Subscription subscription = sendNotificationCommand.getSubscription();
 
         Notification notification = new Notification(subscription, sendNotificationCommand.getPayload());
-
-        PushAsyncService.PushCallback callback = pushService.send(notification);
+        pushService.send(notification).get();
     }
 }
