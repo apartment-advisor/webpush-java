@@ -1,5 +1,13 @@
 package nl.martijndwars.webpush;
 
+import org.bouncycastle.jce.ECNamedCurveTable;
+import org.bouncycastle.jce.interfaces.ECPublicKey;
+import org.bouncycastle.jce.spec.ECNamedCurveParameterSpec;
+import org.jose4j.jws.AlgorithmIdentifiers;
+import org.jose4j.jws.JsonWebSignature;
+import org.jose4j.jwt.JwtClaims;
+import org.jose4j.lang.JoseException;
+
 import java.io.IOException;
 import java.security.GeneralSecurityException;
 import java.security.InvalidAlgorithmParameterException;
@@ -14,16 +22,8 @@ import java.security.spec.InvalidKeySpecException;
 import java.util.Base64;
 import java.util.HashMap;
 import java.util.Map;
-import org.bouncycastle.jce.ECNamedCurveTable;
-import org.bouncycastle.jce.interfaces.ECPublicKey;
-import org.bouncycastle.jce.spec.ECNamedCurveParameterSpec;
-import org.jose4j.jws.AlgorithmIdentifiers;
-import org.jose4j.jws.JsonWebSignature;
-import org.jose4j.jwt.JwtClaims;
-import org.jose4j.lang.JoseException;
 
 public abstract class AbstractPushService<T extends AbstractPushService<T>> {
-
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
     public static final String SERVER_KEY_ID = "server-key-id";
     public static final String SERVER_KEY_CURVE = "P-256";
@@ -49,7 +49,8 @@ public abstract class AbstractPushService<T extends AbstractPushService<T>> {
      */
     private PrivateKey privateKey;
 
-    public AbstractPushService() {}
+    public AbstractPushService() {
+    }
 
     public AbstractPushService(String gcmApiKey) {
         this.gcmApiKey = gcmApiKey;
@@ -87,8 +88,7 @@ public abstract class AbstractPushService<T extends AbstractPushService<T>> {
      * @return An Encrypted object containing the public key, salt, and ciphertext.
      * @throws GeneralSecurityException
      */
-    public static Encrypted encrypt(byte[] payload, ECPublicKey userPublicKey, byte[] userAuth, Encoding encoding)
-        throws GeneralSecurityException {
+    public static Encrypted encrypt(byte[] payload, ECPublicKey userPublicKey, byte[] userAuth, Encoding encoding) throws GeneralSecurityException {
         KeyPair localKeyPair = generateLocalKeyPair();
 
         Map<String, KeyPair> keys = new HashMap<>();
@@ -104,10 +104,10 @@ public abstract class AbstractPushService<T extends AbstractPushService<T>> {
         byte[] ciphertext = httpEce.encrypt(payload, salt, null, SERVER_KEY_ID, userPublicKey, userAuth, encoding);
 
         return new Encrypted.Builder()
-            .withSalt(salt)
-            .withPublicKey(localKeyPair.getPublic())
-            .withCiphertext(ciphertext)
-            .build();
+                .withSalt(salt)
+                .withPublicKey(localKeyPair.getPublic())
+                .withCiphertext(ciphertext)
+                .build();
     }
 
     /**
@@ -118,8 +118,7 @@ public abstract class AbstractPushService<T extends AbstractPushService<T>> {
      * @throws NoSuchProviderException
      * @throws InvalidAlgorithmParameterException
      */
-    private static KeyPair generateLocalKeyPair()
-        throws NoSuchAlgorithmException, NoSuchProviderException, InvalidAlgorithmParameterException {
+    private static KeyPair generateLocalKeyPair() throws NoSuchAlgorithmException, NoSuchProviderException, InvalidAlgorithmParameterException {
         ECNamedCurveParameterSpec parameterSpec = ECNamedCurveTable.getParameterSpec("prime256v1");
         KeyPairGenerator keyPairGenerator = KeyPairGenerator.getInstance("ECDH", "BC");
         keyPairGenerator.initialize(parameterSpec);
@@ -127,8 +126,7 @@ public abstract class AbstractPushService<T extends AbstractPushService<T>> {
         return keyPairGenerator.generateKeyPair();
     }
 
-    protected final HttpRequest prepareRequest(Notification notification, Encoding encoding)
-        throws GeneralSecurityException, IOException {
+    protected final HttpRequest prepareRequest(Notification notification, Encoding encoding) throws GeneralSecurityException, IOException, JoseException {
         if (getPrivateKey() != null && getPublicKey() != null) {
             if (!Utils.verifyKeyPair(getPrivateKey(), getPublicKey())) {
                 throw new IllegalStateException("Public key and private key do not match.");
@@ -136,10 +134,10 @@ public abstract class AbstractPushService<T extends AbstractPushService<T>> {
         }
 
         Encrypted encrypted = encrypt(
-            notification.getPayload(),
-            notification.getUserPublicKey(),
-            notification.getUserAuth(),
-            encoding
+                notification.getPayload(),
+                notification.getUserPublicKey(),
+                notification.getUserAuth(),
+                encoding
         );
 
         byte[] dh = Utils.encode((ECPublicKey) encrypted.getPublicKey());
@@ -159,6 +157,7 @@ public abstract class AbstractPushService<T extends AbstractPushService<T>> {
             headers.put("Topic", notification.getTopic());
         }
 
+
         if (notification.hasPayload()) {
             headers.put("Content-Type", "application/octet-stream");
 
@@ -175,9 +174,7 @@ public abstract class AbstractPushService<T extends AbstractPushService<T>> {
 
         if (notification.isGcm()) {
             if (getGcmApiKey() == null) {
-                throw new IllegalStateException(
-                    "An GCM API key is needed to send a push notification to a GCM endpoint."
-                );
+                throw new IllegalStateException("An GCM API key is needed to send a push notification to a GCM endpoint.");
             }
 
             headers.put("Authorization", "key=" + getGcmApiKey());
@@ -204,27 +201,14 @@ public abstract class AbstractPushService<T extends AbstractPushService<T>> {
 
             byte[] pk = Utils.encode((ECPublicKey) getPublicKey());
 
-            try {
-                if (encoding == Encoding.AES128GCM) {
-                    headers.put(
-                        "Authorization",
-                        "vapid t=" +
-                        jws.getCompactSerialization() +
-                        ", k=" +
-                        Base64.getUrlEncoder().withoutPadding().encodeToString(pk)
-                    );
-                } else if (encoding == Encoding.AESGCM) {
-                    headers.put("Authorization", "WebPush " + jws.getCompactSerialization());
-                }
-            } catch (JoseException e) {
-                throw new RuntimeException(e);
+            if (encoding == Encoding.AES128GCM) {
+                headers.put("Authorization", "vapid t=" + jws.getCompactSerialization() + ", k=" + Base64.getUrlEncoder().withoutPadding().encodeToString(pk));
+            } else if (encoding == Encoding.AESGCM) {
+                headers.put("Authorization", "WebPush " + jws.getCompactSerialization());
             }
 
             if (headers.containsKey("Crypto-Key")) {
-                headers.put(
-                    "Crypto-Key",
-                    headers.get("Crypto-Key") + ";p256ecdsa=" + Base64.getUrlEncoder().encodeToString(pk)
-                );
+                headers.put("Crypto-Key", headers.get("Crypto-Key") + ";p256ecdsa=" + Base64.getUrlEncoder().encodeToString(pk));
             } else {
                 headers.put("Crypto-Key", "p256ecdsa=" + Base64.getUrlEncoder().encodeToString(pk));
             }
@@ -290,8 +274,7 @@ public abstract class AbstractPushService<T extends AbstractPushService<T>> {
      * @param publicKey
      * @return
      */
-    public T setPublicKey(String publicKey)
-        throws NoSuchAlgorithmException, NoSuchProviderException, InvalidKeySpecException {
+    public T setPublicKey(String publicKey) throws NoSuchAlgorithmException, NoSuchProviderException, InvalidKeySpecException {
         setPublicKey(Utils.loadPublicKey(publicKey));
 
         return (T) this;
@@ -323,8 +306,7 @@ public abstract class AbstractPushService<T extends AbstractPushService<T>> {
      * @param privateKey
      * @return
      */
-    public T setPrivateKey(String privateKey)
-        throws NoSuchAlgorithmException, NoSuchProviderException, InvalidKeySpecException {
+    public T setPrivateKey(String privateKey) throws NoSuchAlgorithmException, NoSuchProviderException, InvalidKeySpecException {
         setPrivateKey(Utils.loadPrivateKey(privateKey));
 
         return (T) this;
